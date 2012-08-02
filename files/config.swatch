@@ -1,0 +1,2 @@
+watchfor /(panic|error)/
+  exec echo $0 >> /dev/null

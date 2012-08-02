@@ -1,0 +1,86 @@
+#!/bin/sh                                                                          
+                                                                                   
+# chkconfig: 2345 90 60                                                            
+# description: swatch                                                              
+                                                                                   
+### BEGIN INIT INFO                                                                
+# Provides:          swatch                                                        
+# Required-Start:    $local_fs, syslog                                             
+# Required-Stop:     $local_fs                                                     
+# Default-Start:     2 3 4 5                                                       
+# Default-Stop:      0 1 6                                                         
+# Short-Description: start swatch at boot time                                     
+# Description:       enable swatch                                                 
+### END INIT INFO                                                                  
+                                                                                   
+if [ "$(id -u)" != "0" ]; then                                                     
+  echo "script must be run as root" 1>&2                                           
+  exit 1                                                                           
+fi                                                                                 
+                                                                                   
+CONFIG="/etc/swatch/config.swatch"                                                 
+PIDDIR="/var/run/swatch"                                                           
+PID="$PIDDIR/swatch.pid"                                                           
+SCRIPT="$PIDDIR/.swatch_script.*"                                                  
+RETVAL=0                                                                           
+                                                                                   
+swatch_start() {                                                                   
+if [ -f $PID ]                                                                     
+  then                                                                             
+    echo "swatch is already running"                                               
+    cat $PID                                                                       
+  else                                                                             
+    echo "swatch is starting"                                                      
+    /usr/bin/swatch --config-file=$CONFIG --tail-file="<%= logs.flatten.join(' ') %>" --tail-args="-F" --pid-file=$PID --script-dir=$PIDDIR > /dev/null 2>&1 &
+    RETVAL=$?                                                                      
+fi                                                                                 
+}                                                                                  
+                                                                                   
+swatch_stop() {                                                                    
+if [ -f $PID ]                                                                     
+  then                                                                             
+    echo "swatch is stopping"                                                      
+    PARENT="$(< "$PID")"                                                           
+    INIT_PID=`ps -o ppid $PARENT |awk ' /[0-9]+/ { print $1 } '`                   
+    CPID1=`ps --ppid $PARENT |awk ' /[0-9]+/ { print $1 } '`                       
+    kill -9 $INIT_PID $PARENT $CPID1                                               
+    rm -f $PID $SCRIPT                                               
+    RETVAL=$?                                                                      
+  else                                                                             
+    echo "swatch is not running"                                                   
+fi                                                                                 
+}                                                                                  
+                                                                                   
+swatch_status() {                                                                  
+if [ -f $PID ]                                                                     
+  then                                                                             
+    echo "swatch is running"                                                       
+    PARENT="$(< "$PID")"                                                           
+    INIT_PID=`ps -o ppid $PARENT |awk ' /[0-9]+/ { print $1 } '`                   
+    ps -o pid -o command --pid $INIT_PID --pid $PARENT --ppid $PARENT              
+  else                                                                             
+    echo "swatch is not running"                                                   
+  RETVAL=$?                                                                        
+fi                                                                                 
+}                                                                                  
+                                                                                   
+case "$1" in                                                                       
+  start)                                                                           
+    swatch_start                                                                   
+    ;;                                                                             
+  stop)                                                                            
+    swatch_stop                                                                    
+    ;;                                                                             
+  restart)                                                                         
+    swatch_stop                                                                    
+    swatch_start                                                                   
+    ;;                                                                             
+  status)                                                                          
+    swatch_status                                                                  
+    ;;                                                                             
+  *)                                                                               
+    echo "Usage: $0 {start|stop|restart|status}"                                   
+    exit 1                                                                         
+esac
+
+exit $RETVAL
